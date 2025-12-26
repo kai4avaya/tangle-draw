@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calligraphic Tangle</title>
+    <link rel="icon" type="image/ico" href="tangle.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body, html {
@@ -24,22 +25,37 @@
 
         .bottom-right-ui {
             position: fixed;
-            bottom: 20px;
-            right: 30px;
+            bottom: 24px;
+            right: 32px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             z-index: 20;
         }
 
         .instructions {
             font-family: serif;
             font-style: italic;
-            color: #cbd5e1;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
+            color: #94a3b8;
+            /* Responsive sizing: prominent on md+, elegant on small */
+            font-size: 0.8rem;
+            letter-spacing: 0.04em;
             pointer-events: none;
-            margin-right: 4px;
+            margin-right: 6px;
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 1;
+        }
+
+        @media (min-width: 768px) {
+            .instructions {
+                font-size: 1rem;
+                color: #64748b;
+            }
+        }
+
+        .instructions.drawing-active {
+            opacity: 0;
+            transform: translateY(8px);
         }
 
         .icon-btn {
@@ -57,6 +73,13 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.03);
         }
 
+        @media (min-width: 768px) {
+            .icon-btn {
+                width: 38px;
+                height: 38px;
+            }
+        }
+
         .icon-btn svg {
             width: 14px;
             height: 14px;
@@ -65,7 +88,7 @@
         .icon-btn:hover {
             transform: translateY(-1px);
             border-color: #e2e8f0;
-            color: #64748b;
+            color: #475569;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
@@ -261,8 +284,13 @@
                 strokes: strokes,
                 date: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
             });
-            statusText.innerHTML = "Saved &middot; Space to pan";
-            setTimeout(() => { if(!isPlaying) statusText.innerHTML = "Click to draw &middot; Space to pan"; }, 2000);
+            
+            if (!isDrawing) {
+                statusText.innerHTML = "Saved &middot; Space to pan";
+                setTimeout(() => { 
+                    if(!isPlaying && !isDrawing) statusText.innerHTML = "Click to draw &middot; Space to pan"; 
+                }, 2000);
+            }
         }
 
         async function loadDrawing(id = null) {
@@ -406,6 +434,7 @@
 
                 if (e.button === 0 && !e.shiftKey) {
                     isDrawing = true;
+                    statusText.classList.add('drawing-active'); // Fade out instructions
                     currentStroke = [];
                     strokes.push(currentStroke);
                     strokeDistance = 0;
@@ -432,8 +461,11 @@
             });
 
             window.addEventListener('mouseup', () => {
-                if (isDrawing) saveToDB();
-                isDrawing = false;
+                if (isDrawing) {
+                    isDrawing = false;
+                    statusText.classList.remove('drawing-active'); // Fade in instructions
+                    saveToDB();
+                }
                 isPanning = false;
                 currentStroke = null;
             });
@@ -500,7 +532,6 @@
             tCtx.fillStyle = '#ffffff'; tCtx.fillRect(0,0,150,150);
             if (!drawingStrokes || !drawingStrokes.length) return;
 
-            // Find bounding box for centering
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
             drawingStrokes.forEach(s => {
                 s.forEach(p => {
@@ -520,7 +551,7 @@
             if (drawW > 0 || drawH > 0) {
                 scale = Math.min(availableSize / drawW, availableSize / drawH);
             }
-            scale = Math.min(scale, 5); // Prevent extreme zoom on tiny dots
+            scale = Math.min(scale, 5);
 
             const offsetX = 75 - (minX + drawW / 2) * scale;
             const offsetY = 75 - (minY + drawH / 2) * scale;
