@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calligraphic Tangle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #ffffff;
+            cursor: crosshair;
+            touch-action: none;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .bottom-right-ui {
+            position: fixed;
+            bottom: 20px;
+            right: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 20;
+        }
+
+        .instructions {
+            font-family: serif;
+            font-style: italic;
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            pointer-events: none;
+            margin-right: 4px;
+        }
+
+        .icon-btn {
+            background: #ffffff;
+            border: 1px solid #f1f5f9;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #94a3b8;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+
+        .icon-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .icon-btn:hover {
+            transform: translateY(-1px);
+            border-color: #e2e8f0;
+            color: #64748b;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .icon-btn.active {
+            background: #0f172a;
+            color: #ffffff;
+            border-color: #0f172a;
+        }
+
+        .icon-btn.loading {
+            animation: pulse 1.5s infinite;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        #galleryModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .gallery-content {
+            background: white;
+            border: 1px solid #f1f5f9;
+            width: 100%;
+            max-width: 800px;
+            max-height: 80vh;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+            overflow-y: auto;
+            justify-content: center;
+        }
+
+        .gallery-item {
+            aspect-ratio: 1;
+            border: 1px solid #f8fafc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            background: #ffffff;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-item:hover {
+            border-color: #0f172a;
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
+        }
+
+        .gallery-item canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .gallery-item-label {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            padding: 6px;
+            background: rgba(255,255,255,0.9);
+            font-size: 9px;
+            color: #94a3b8;
+            text-align: center;
+            border-top: 1px solid #f1f5f9;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bottom-right-ui">
+        <div class="instructions" id="status-text">Click to draw &middot; Space to pan</div>
+        
+        <button class="icon-btn" id="downloadBtn" title="Download Audio">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+        </button>
+
+        <button class="icon-btn" id="clearBtn" title="Clear Drawing">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+        </button>
+
+        <button class="icon-btn" id="musicBtn" title="Play Sound">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+            </svg>
+        </button>
+
+        <button class="icon-btn" id="galleryBtn" title="Drawing History">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"></path></svg>
+        </button>
+    </div>
+
+    <div id="galleryModal">
+        <div class="gallery-content">
+            <div class="p-6 border-b flex justify-between items-center">
+                <h2 class="text-xl font-serif italic text-slate-800">Your Gallery</h2>
+                <button id="closeGallery" class="text-slate-400 hover:text-black transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="gallery-grid" id="galleryGrid"></div>
+            <div class="p-5 bg-slate-50 rounded-b-lg flex justify-between items-center text-[10px] text-slate-400 px-8">
+                <span>Stored locally in your browser.</span>
+                <button onclick="newDrawing()" class="text-indigo-600 font-bold hover:underline uppercase tracking-wider">Start New Canvas</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const musicBtn = document.getElementById('musicBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const galleryBtn = document.getElementById('galleryBtn');
+        const galleryModal = document.getElementById('galleryModal');
+        const closeGallery = document.getElementById('closeGallery');
+        const galleryGrid = document.getElementById('galleryGrid');
+        const statusText = document.getElementById('status-text');
+
+        let width, height;
+        let strokes = []; 
+        let currentStroke = null;
+        let currentDrawingId = Date.now();
+        
+        let offset = { x: 0, y: 0 };
+        let lastMouse = { x: 0, y: 0 };
+        let isPanning = false;
+        let isDrawing = false;
+        let strokeDistance = 0;
+
+        const PENTATONIC = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00];
+        let audioCtx = null;
+
+        let isPlaying = false;
+        let playStrokeIdx = 0;
+        let playPointIdx = 0;
+        let playPos = null;
+
+        let db;
+        const dbName = "CalligraphyTangleDB";
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            db.createObjectStore("drawings", { keyPath: "id" });
+        };
+        request.onsuccess = (e) => { 
+            db = e.target.result; 
+            loadDrawing(); 
+        };
+
+        function saveToDB() {
+            if (!db) return;
+            const transaction = db.transaction(["drawings"], "readwrite");
+            const store = transaction.objectStore("drawings");
+            store.put({
+                id: currentDrawingId,
+                strokes: strokes,
+                date: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            });
+            statusText.innerHTML = "Saved &middot; Space to pan";
+            setTimeout(() => { if(!isPlaying) statusText.innerHTML = "Click to draw &middot; Space to pan"; }, 2000);
+        }
+
+        async function loadDrawing(id = null) {
+            if (!db) return;
+            const transaction = db.transaction(["drawings"], "readonly");
+            const store = transaction.objectStore("drawings");
+            const request = id ? store.get(id) : store.getAll();
+            
+            request.onsuccess = () => {
+                if (id) {
+                    const data = request.result;
+                    if (data) {
+                        strokes = data.strokes;
+                        currentDrawingId = data.id;
+                        offset = { x: 0, y: 0 };
+                    }
+                } else {
+                    const all = request.result;
+                    if (all.length > 0 && !id) {
+                        const latest = all.sort((a,b) => b.id - a.id)[0];
+                        strokes = latest.strokes;
+                        currentDrawingId = latest.id;
+                    }
+                }
+            };
+        }
+
+        function newDrawing() {
+            strokes = [];
+            currentDrawingId = Date.now();
+            offset = { x: 0, y: 0 };
+            galleryModal.style.display = 'none';
+            isPlaying = false;
+            musicBtn.classList.remove('active');
+            playPos = null;
+            saveToDB(); 
+        }
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playTone(freq, volume, ctxObj = audioCtx, timeOffset = 0) {
+            if (!ctxObj) return;
+            const osc = ctxObj.createOscillator();
+            const gain = ctxObj.createGain();
+            const lpf = ctxObj.createBiquadFilter();
+            const time = ctxObj.currentTime + timeOffset;
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, time);
+            
+            lpf.type = 'lowpass';
+            lpf.frequency.setValueAtTime(800, time);
+            
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(volume * 0.08, time + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+            
+            osc.connect(lpf);
+            lpf.connect(gain);
+            gain.connect(ctxObj.destination);
+            
+            osc.start(time);
+            osc.stop(time + 0.6);
+        }
+
+        function bufferToWav(abuffer) {
+            let numOfChan = abuffer.numberOfChannels,
+                length = abuffer.length * numOfChan * 2 + 44,
+                buffer = new ArrayBuffer(length),
+                view = new DataView(buffer),
+                channels = [], i, sample,
+                offset = 0,
+                pos = 0;
+
+            function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+            function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
+
+            setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157);
+            setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(numOfChan);
+            setUint32(abuffer.sampleRate); setUint32(abuffer.sampleRate * 2 * numOfChan);
+            setUint16(numOfChan * 2); setUint16(16);
+            setUint32(0x61746164); setUint32(length - pos - 4);
+
+            for(i = 0; i < abuffer.numberOfChannels; i++) channels.push(abuffer.getChannelData(i));
+            while(pos < length) {
+                for(i = 0; i < numOfChan; i++) {
+                    sample = Math.max(-1, Math.min(1, channels[i][offset]));
+                    sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+                    view.setInt16(pos, sample, true); pos += 2;
+                }
+                offset++;
+            }
+            return new Blob([buffer], {type: "audio/wav"});
+        }
+
+        async function downloadAudio() {
+            if (strokes.length === 0) return;
+            downloadBtn.classList.add('loading');
+            statusText.innerText = "Generating Audio...";
+
+            const pointsPerSec = 120; 
+            let totalPoints = 0;
+            strokes.forEach(s => totalPoints += s.length);
+            const duration = (totalPoints / pointsPerSec) + 1.5;
+
+            const offCtx = new OfflineAudioContext(1, 44100 * duration, 44100);
+            
+            let currentTime = 0;
+            strokes.forEach(stroke => {
+                for (let i = 0; i < stroke.length; i += 4) {
+                    const p = stroke[i];
+                    const normY = Math.max(0, Math.min(1, 1 - p.y / height));
+                    const noteIdx = Math.floor(normY * (PENTATONIC.length - 1));
+                    playTone(PENTATONIC[noteIdx], p.w / 12, offCtx, currentTime);
+                    currentTime += (4 / pointsPerSec);
+                }
+                currentTime += 0.5;
+            });
+
+            const renderedBuffer = await offCtx.startRendering();
+            const blob = bufferToWav(renderedBuffer);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `tangle-audio-${Date.now()}.wav`;
+            link.click();
+
+            downloadBtn.classList.remove('loading');
+            statusText.innerHTML = "Click to draw &middot; Space to pan";
+        }
+
+        function init() {
+            resize();
+            window.addEventListener('resize', resize);
+            
+            window.addEventListener('mousedown', (e) => {
+                if (isPlaying || galleryModal.style.display === 'flex') return;
+                if (e.target.closest('.icon-btn')) return;
+
+                if (e.button === 0 && !e.shiftKey) {
+                    isDrawing = true;
+                    currentStroke = [];
+                    strokes.push(currentStroke);
+                    strokeDistance = 0;
+                } else {
+                    isPanning = true;
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                const dx = e.clientX - lastMouse.x;
+                const dy = e.clientY - lastMouse.y;
+                if (isPanning) {
+                    offset.x += dx;
+                    offset.y += dy;
+                } else if (isDrawing && !isPlaying) {
+                    const moveDist = Math.sqrt(dx * dx + dy * dy);
+                    if (moveDist > 1) {
+                        strokeDistance += moveDist;
+                        addTangledPoint(e.clientX, e.clientY, moveDist);
+                    }
+                }
+                lastMouse.x = e.clientX;
+                lastMouse.y = e.clientY;
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDrawing) saveToDB();
+                isDrawing = false;
+                isPanning = false;
+                currentStroke = null;
+            });
+
+            musicBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                initAudio();
+                if (strokes.length === 0) return;
+                isPlaying = !isPlaying;
+                musicBtn.classList.toggle('active', isPlaying);
+                if (isPlaying) { 
+                    playStrokeIdx = 0; 
+                    playPointIdx = 0; 
+                    statusText.innerText = "Playing Melody..."; 
+                }
+                else { statusText.innerHTML = "Click to draw &middot; Space to pan"; }
+            });
+
+            clearBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                newDrawing();
+            });
+
+            downloadBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                downloadAudio();
+            });
+
+            galleryBtn.addEventListener('click', openGallery);
+            closeGallery.onclick = () => galleryModal.style.display = 'none';
+            window.addEventListener('contextmenu', (e) => e.preventDefault());
+            window.addEventListener('keydown', (e) => { if (e.code === 'Space') isPanning = true; });
+            window.addEventListener('keyup', (e) => { if (e.code === 'Space') isPanning = false; });
+
+            requestAnimationFrame(animate);
+        }
+
+        function openGallery() {
+            galleryModal.style.display = 'flex';
+            galleryGrid.innerHTML = '';
+            const transaction = db.transaction(["drawings"], "readonly");
+            transaction.objectStore("drawings").getAll().onsuccess = (e) => {
+                const results = e.target.result.sort((a,b) => b.id - a.id);
+                results.forEach(drawing => {
+                    if(!drawing.strokes || drawing.strokes.length === 0) return;
+                    const item = document.createElement('div');
+                    item.className = 'gallery-item';
+                    const thumb = document.createElement('canvas');
+                    thumb.width = 150; thumb.height = 150;
+                    drawThumbnail(thumb, drawing.strokes);
+                    item.appendChild(thumb);
+                    const label = document.createElement('div');
+                    label.className = 'gallery-item-label';
+                    label.innerText = drawing.date;
+                    item.appendChild(label);
+                    item.onclick = () => { loadDrawing(drawing.id); galleryModal.style.display = 'none'; };
+                    galleryGrid.appendChild(item);
+                });
+            };
+        }
+
+        function drawThumbnail(canv, drawingStrokes) {
+            const tCtx = canv.getContext('2d');
+            tCtx.fillStyle = '#ffffff'; tCtx.fillRect(0,0,150,150);
+            if (!drawingStrokes || !drawingStrokes.length) return;
+
+            // Find bounding box for centering
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            drawingStrokes.forEach(s => {
+                s.forEach(p => {
+                    if (p.x < minX) minX = p.x;
+                    if (p.x > maxX) maxX = p.x;
+                    if (p.y < minY) minY = p.y;
+                    if (p.y > maxY) maxY = p.y;
+                });
+            });
+
+            const drawW = maxX - minX;
+            const drawH = maxY - minY;
+            const padding = 25;
+            const availableSize = 150 - (padding * 2);
+
+            let scale = 1;
+            if (drawW > 0 || drawH > 0) {
+                scale = Math.min(availableSize / drawW, availableSize / drawH);
+            }
+            scale = Math.min(scale, 5); // Prevent extreme zoom on tiny dots
+
+            const offsetX = 75 - (minX + drawW / 2) * scale;
+            const offsetY = 75 - (minY + drawH / 2) * scale;
+
+            tCtx.lineCap = 'round';
+            drawingStrokes.forEach(s => {
+                if (s.length < 2) return;
+                tCtx.beginPath();
+                tCtx.moveTo(s[0].x * scale + offsetX, s[0].y * scale + offsetY);
+                s.forEach(p => {
+                    tCtx.strokeStyle = p.color || '#000';
+                    tCtx.lineWidth = Math.max(0.5, p.w * scale);
+                    tCtx.lineTo(p.x * scale + offsetX, p.y * scale + offsetY);
+                });
+                tCtx.stroke();
+            });
+        }
+
+        function addTangledPoint(mx, my, speed) {
+            const wx = mx - offset.x;
+            const wy = my - offset.y;
+            const wildness = 12;
+            const freq = 0.15;
+            const ox = Math.sin(strokeDistance * freq) * wildness + Math.cos(strokeDistance * freq * 0.5) * (wildness * 0.5);
+            const oy = Math.cos(strokeDistance * freq) * wildness + Math.sin(strokeDistance * freq * 0.7) * (wildness * 0.3);
+            const targetThickness = Math.max(1.2, 7 - (speed * 0.4));
+            currentStroke.push({ x: wx + ox, y: wy + oy, w: targetThickness, color: null });
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        function drawDots() {
+            const spacing = 80;
+            ctx.fillStyle = '#f1f5f9';
+            const startX = offset.x % spacing;
+            const startY = offset.y % spacing;
+            for (let x = startX; x < width; x += spacing) {
+                for (let y = startY; y < height; y += spacing) {
+                    ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+        }
+
+        function updatePlayback() {
+            if (!isPlaying || strokes.length === 0) return;
+            const stroke = strokes[playStrokeIdx];
+            if (!stroke || stroke.length === 0) { playNextStroke(); return; }
+            
+            const p = stroke[playPointIdx];
+            playPos = { x: p.x + offset.x, y: p.y + offset.y };
+            
+            const normY = Math.max(0, Math.min(1, 1 - (p.y + offset.y) / height));
+            const noteIdx = Math.floor(normY * (PENTATONIC.length - 1));
+            
+            const hue = (noteIdx / PENTATONIC.length) * 360;
+            const segmentColor = `hsla(${hue}, 75%, 55%, 0.8)`;
+            
+            const lookback = 4;
+            for(let i = Math.max(0, playPointIdx - lookback); i <= playPointIdx; i++) {
+                stroke[i].color = segmentColor;
+            }
+
+            if (playPointIdx % 4 === 0) {
+                playTone(PENTATONIC[noteIdx], p.w / 12);
+            }
+            
+            playPointIdx += 2;
+            if (playPointIdx >= stroke.length) playNextStroke();
+        }
+
+        function playNextStroke() {
+            playPointIdx = 0; playStrokeIdx++;
+            if (playStrokeIdx >= strokes.length) {
+                isPlaying = false;
+                musicBtn.classList.remove('active');
+                playPos = null;
+                statusText.innerHTML = "Click to draw &middot; Space to pan";
+                saveToDB(); 
+            }
+        }
+
+        function animate() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            drawDots();
+            updatePlayback();
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+            strokes.forEach((stroke, sIdx) => {
+                if (stroke.length < 2) return;
+                for (let i = 1; i < stroke.length; i++) {
+                    const p1 = stroke[i-1];
+                    const p2 = stroke[i];
+                    if (isPlaying && sIdx === playStrokeIdx && i > playPointIdx) break;
+                    if (isPlaying && sIdx > playStrokeIdx) break;
+                    ctx.beginPath();
+                    ctx.lineWidth = p2.w;
+                    ctx.strokeStyle = p2.color || '#000000';
+                    ctx.moveTo(p1.x + offset.x, p1.y + offset.y);
+                    ctx.lineTo(p2.x + offset.x, p2.y + offset.y);
+                    ctx.stroke();
+                }
+            });
+
+            if (isPlaying && playPos) {
+                ctx.fillStyle = '#0f172a'; ctx.beginPath();
+                ctx.arc(playPos.x, playPos.y, 3, 0, Math.PI * 2); ctx.fill();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        init();
+    </script>
+</body>
+</html>
